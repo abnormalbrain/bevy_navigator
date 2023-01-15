@@ -1,0 +1,27 @@
+[package]
+name = "bevy_navigator_2d"
+version = "0.1.0"
+edition = "2021"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[dependencies]
+bevy_app = "0.9"
+bevy_ecs = "0.9"
+bevy_math = "0.9"
+bevy_reflect = "0.9"
+bevy_time = "0.9"
+bevy_transform = "0.9"
+bevy_utils = "0.9"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = "0.4"
+
+[[bench]]
+name = "bench_path"
+harness = false
