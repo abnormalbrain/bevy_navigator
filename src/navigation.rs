@@ -202,7 +202,8 @@ impl NavGraph {
     #[inline(always)]
     fn h_func(&self, a: &u32, b: &u32) -> u32 {
         if let (Some(a_node), Some(b_node)) = (self.points.get(a), self.points.get(b)) {
-            (a_node.location.distance(b_node.location) / b_node.speed_modifier * 100.0).abs() as u32
+            (a_node.location.distance_squared(b_node.location) / b_node.speed_modifier * 100.0)
+                as u32
         } else {
             u32::MAX
         }
@@ -224,15 +225,6 @@ impl NavGraph {
         let mut came_from = HashMap::<u32, u32>::with_capacity(cap_guess);
         let mut g_score = HashMap::<u32, u32>::with_capacity(cap_guess);
         let mut f_score = HashMap::<u32, u32>::with_capacity(cap_guess);
-
-        // let h = |a: &u32, b: &u32| -> u32 {
-        //     if let (Some(a_node), Some(b_node)) = (self.points.get(a), self.points.get(b)) {
-        //         (a_node.location.distance(b_node.location) / b_node.speed_modifier * 100.0).abs()
-        //             as u32
-        //     } else {
-        //         u32::MAX
-        //     }
-        // };
 
         let start_h = self.h_func(&a, &b);
         let start_node = PathNode { id: a, f: start_h };

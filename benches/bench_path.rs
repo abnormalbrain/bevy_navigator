@@ -61,7 +61,7 @@ fn bench_path(c: &mut Criterion) {
 
     medium_sparse_group.finish();
 
-    let mut medium_dense_group = c.benchmark_group("Mediume Dense Nav");
+    let mut medium_dense_group = c.benchmark_group("Medium Dense Nav");
     medium_dense_group.measurement_time(core::time::Duration::from_secs(30));
 
     medium_dense_group.bench_function("long", |b| b.iter(|| medium_dense.find_path(1, 250000)));
