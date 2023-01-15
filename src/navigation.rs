@@ -133,10 +133,43 @@ impl NavGraph {
         Self::default()
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            points: HashMap::with_capacity(capacity),
+            ..Default::default()
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.points.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.points.is_empty()
+    }
+
+    /// Adds a new [`NavPoint`] to the graph.
+    ///
+    /// [`NavPoint`]s are not connected to anything, and thus will not be navigated to, without [`NavGraph::connect_points`] being
+    /// called.
+    ///
+    /// ## Example
+    /// ```
+    /// # use bevy_math::Vec3;
+    /// # use bevy_navigator::{NavGraph, NavPoint};
+    ///
+    /// let mut nav_graph = NavGraph::new();
+    /// nav_graph.add_nav_point(NavPoint::new(1, Vec3::new(0.0, 0.0, 0.0), 1.0, 1));
+    /// nav_graph.add_nav_point(NavPoint::new(2, Vec3::new(1.0, 0.0, 0.0), 1.0, 1));
+    ///
+    /// // Trying to navigate between unconnected points will not return anything.
+    /// assert!(nav_graph.find_path(1, 2).is_none());
+    ///
+    /// nav_graph.connect_points(1, 2);
+    ///
+    /// assert!(nav_graph.find_path(1, 2).is_some());
+    ///
+    /// ```
     pub fn add_nav_point(&mut self, point: NavPoint) {
         for connection in &point.connections {
             self.points.entry(*connection).and_modify(|b| {
@@ -150,6 +183,61 @@ impl NavGraph {
         self.points.insert(point.id, point);
     }
 
+    /// Connects two [`NavPoint`]s in the graph, making a travelable path between them.
+    ///
+    /// This method will do nothing if either of the specified IDs don't exist in the graph.
+    ///
+    /// ## Example
+    /// We can construct the following graph and make all points travelable:
+    ///
+    /// 1--2--3
+    /// |\/|\/|
+    /// |/\|/\|
+    /// 4--5--6
+    /// |\/|\/|
+    /// |/\|/\|
+    /// 7--8--9
+    ///
+    /// ```
+    /// # use bevy_math::Vec3;
+    /// # use bevy_navigator::{NavGraph, NavPoint};
+    /// let mut nav_graph = NavGraph::new();
+    ///
+    /// let mut i = 1;
+    /// for y in 0..3 {
+    ///     for x in 0..3 {
+    ///         nav_graph.add_nav_point(NavPoint::new(i, Vec3::new(x as f32, y as f32, 0.0), 1.0, 1));
+    ///         i += 1;
+    ///     }
+    /// }
+    ///
+    /// nav_graph.connect_points(1, 2);
+    /// nav_graph.connect_points(1, 4);
+    /// nav_graph.connect_points(1, 5);
+    /// // ...
+    /// # nav_graph.connect_points(2, 3);
+    /// # nav_graph.connect_points(2, 4);
+    /// # nav_graph.connect_points(2, 5);
+    /// # nav_graph.connect_points(2, 6);
+    /// # nav_graph.connect_points(3, 5);
+    /// # nav_graph.connect_points(3, 6);
+    /// # nav_graph.connect_points(4, 5);
+    /// # nav_graph.connect_points(4, 7);
+    /// # nav_graph.connect_points(4, 8);
+    /// # nav_graph.connect_points(5, 6);
+    /// # nav_graph.connect_points(5, 7);
+    /// # nav_graph.connect_points(5, 8);
+    /// # nav_graph.connect_points(5, 9);
+    /// # nav_graph.connect_points(6, 8);
+    /// # nav_graph.connect_points(6, 9);
+    /// # nav_graph.connect_points(7, 8);
+    /// # nav_graph.connect_points(8, 9);
+    ///
+    ///
+    /// assert_eq!(nav_graph.find_path(1, 9).unwrap()[..], [5, 9]);
+    /// assert_eq!(nav_graph.find_path(1, 7).unwrap()[..], [4, 7]);
+    /// ```
+    ///
     pub fn connect_points(&mut self, a: u32, b: u32) {
         if !self.has_node(a) || !self.has_node(b) {
             return;
@@ -163,11 +251,49 @@ impl NavGraph {
         });
     }
 
+    /// Returns true if a node with the current ID is in the graph.
     #[inline(always)]
     pub fn has_node(&self, id: u32) -> bool {
         self.points.contains_key(&id)
     }
 
+    /// Removes the specified point from the graph and all related connections.
+    ///
+    /// Note that this function is `O(n)` with the number of connected points.
+    ///
+    /// ## Example
+    ///
+    /// If we create the following graph:
+    ///
+    /// 1
+    /// |\
+    /// | \
+    /// 2  3
+    /// | /
+    /// |/
+    /// 4
+    ///
+    /// The initial path between 1 and 4 should be `[2, 4]`. Removing node 2
+    /// should then result in `[3, 4]`.
+    ///
+    /// ```
+    /// # use bevy_math::Vec3;
+    /// # use bevy_navigator::{NavGraph, NavPoint};
+    /// let mut nav_graph = NavGraph::new();
+    /// nav_graph.add_nav_point(NavPoint::new(1, Vec3::new(0.0, 0.0, 0.0), 1.0, 1));
+    /// nav_graph.add_nav_point(NavPoint::new(2, Vec3::new(0.0, -1.0, 0.0), 1.0, 1));
+    /// nav_graph.add_nav_point(NavPoint::new(3, Vec3::new(-1.0, -1.0, 0.0), 1.0, 1));
+    /// nav_graph.add_nav_point(NavPoint::new(4, Vec3::new(0.0, -2.0, 0.0), 1.0, 1));
+    /// nav_graph.connect_points(1, 2);
+    /// nav_graph.connect_points(1, 3);
+    /// nav_graph.connect_points(2, 4);
+    /// nav_graph.connect_points(3, 4);
+    ///
+    /// assert_eq!(nav_graph.find_path(1, 4).unwrap()[..], [2, 4]);
+    /// nav_graph.remove_point(2);
+    /// assert_eq!(nav_graph.find_path(1, 4).unwrap()[..], [3, 4]);
+    /// ```
+    ///
     pub fn remove_point(&mut self, id: u32) {
         if let Some(point) = self.points.remove(&id) {
             for connection in &point.connections {
@@ -178,6 +304,31 @@ impl NavGraph {
         }
     }
 
+    /// Checks whether the specified point has capacity for more occupants.
+    ///
+    /// Also returns false if the specified point doesn't exist.
+    ///
+    /// ## Example
+    /// ```
+    /// # use bevy_math::Vec3;
+    /// # use bevy_navigator::{NavGraph, NavPoint};
+    /// let mut nav_graph = NavGraph::new();
+    /// nav_graph.add_nav_point(NavPoint::new(1, Vec3::new(0.0, 0.0, 0.0), 1.0, 1));
+    /// nav_graph.add_nav_point(NavPoint::new(2, Vec3::new(0.0, 0.0, 0.0), 1.0, 2));
+    ///
+    /// assert!(nav_graph.can_occupy(1));
+    /// // Can't occupy points which don't exist.
+    /// assert!(!nav_graph.can_occupy(3));
+    ///
+    /// // The NavPoint has a max_occupancy of 1, so this will mark it as full.
+    /// nav_graph.occupy(1);
+    /// assert!(!nav_graph.can_occupy(1));
+    ///
+    /// nav_graph.occupy(2);
+    ///
+    /// // NavPoint 2 has a max_occupancy of 2, so this should still return true with 1 occupant.
+    /// assert!(nav_graph.can_occupy(2));
+    /// ```
     pub fn can_occupy(&self, id: u32) -> bool {
         self.points
             .get(&id)
@@ -185,6 +336,27 @@ impl NavGraph {
             .unwrap_or(false)
     }
 
+    /// Attempts to increase the occupant count for a node and returns whether it succeeded.
+    ///
+    /// Also returns false if the specified NavPoint doesn't exist.
+    ///
+    /// ## Example
+    /// ```
+    /// # use bevy_math::Vec3;
+    /// # use bevy_navigator::{NavGraph, NavPoint};
+    /// let mut nav_graph = NavGraph::new();
+    ///
+    /// nav_graph.add_nav_point(NavPoint::new(1, Vec3::new(0.0, 0.0, 0.0), 1.0, 1));
+    ///
+    /// // The NavPoint has a max_occupancy of 1, so the first call should succeed and the second
+    /// // should fail.
+    /// assert!(nav_graph.occupy(1));
+    /// assert!(!nav_graph.occupy(1));
+    ///
+    /// // This should return false for NavPoints that aren't in the graph.
+    /// assert!(!nav_graph.occupy(1));
+    ///
+    /// ```
     pub fn occupy(&mut self, id: u32) -> bool {
         let mut occupied = false;
         self.points.entry(id).and_modify(|p| {
@@ -324,5 +496,24 @@ mod tests {
 
         nav_graph.unoccupy(2);
         assert_eq!(nav_graph.find_path(1, 4).unwrap()[0], 2);
+    }
+
+    #[test]
+    pub fn test_remove() {
+        let mut nav_graph = NavGraph::new();
+        nav_graph.add_nav_point(NavPoint::new(1, Vec3::new(0.0, 0.0, 0.0), 1.0, 1));
+        nav_graph.add_nav_point(NavPoint::new(2, Vec3::new(0.0, 1.0, 0.0), 1.0, 1));
+        nav_graph.add_nav_point(NavPoint::new(3, Vec3::new(1.0, 1.0, 0.0), 1.0, 1));
+        nav_graph.add_nav_point(NavPoint::new(4, Vec3::new(0.0, 2.0, 0.0), 1.0, 1));
+
+        nav_graph.connect_points(1, 2);
+        nav_graph.connect_points(1, 3);
+        nav_graph.connect_points(2, 4);
+        nav_graph.connect_points(3, 4);
+
+        assert_eq!(nav_graph.find_path(1, 4).unwrap()[0], 2);
+
+        nav_graph.remove_point(2);
+        assert_eq!(nav_graph.find_path(1, 4).unwrap()[0], 3);
     }
 }

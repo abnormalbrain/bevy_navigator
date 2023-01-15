@@ -1,7 +1,7 @@
 use bevy_math::Vec3;
 use criterion::*;
 
-use bevy_navigator_2d::{NavGraph, NavPoint};
+use bevy_navigator::{NavGraph, NavPoint};
 
 fn create_grid(size: u32, dense: bool) -> NavGraph {
     let mut nav_graph = NavGraph::new();

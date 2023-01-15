@@ -1,5 +1,5 @@
 [package]
-name = "bevy_navigator_2d"
+name = "bevy_navigator"
 version = "0.1.0"
 edition = "2021"
 
