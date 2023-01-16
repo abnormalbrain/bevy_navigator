@@ -403,7 +403,8 @@ impl NavGraph {
 
     /// Computes a path from between two [`NavPoint`]s based on their IDs.
     ///
-    /// If a valid path exists, a [`Vec`] of node IDs is returned.
+    /// If a valid path exists, a [`Vec`] of node IDs is returned. The path does not contain the
+    /// starting node id (the one passed in as the `a` parameter.
     ///
     /// The path returned is not guaranteed to continue being valid for the duration of travel
     /// across it, so validity of each node should be checked before moving. If a particular
