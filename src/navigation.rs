@@ -3,6 +3,7 @@ use std::{
     collections::{BinaryHeap, VecDeque},
 };
 
+use bevy_ecs::system::Resource;
 use bevy_math::Vec3;
 use bevy_reflect::prelude::*;
 use bevy_utils::{HashMap, HashSet};
@@ -98,7 +99,7 @@ impl NavPointIdFreelist {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Resource)]
 pub struct NavGraph {
     points: HashMap<u32, NavPoint>,
     highest_id: u32,
@@ -129,10 +130,20 @@ impl Ord for PathNode {
 }
 
 impl NavGraph {
+    /// Creates a new, empty [`NavGraph`].
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Creates a new [`NavGraph`], preallocated to fit `capacity` [`NavPoint`]s.
+    ///
+    /// This can be useful to avoid reallocating underlying datastructures when adding points.
+    ///
+    /// The underlying storage typically uses a doubling strategy, such that each time it's full,
+    /// it copies the data into a new datastructure of 2x the current size, so the rate at which
+    /// the copies takes place decreases as the size grows. Even if the total size is unknown,
+    /// it may be useful to preallocate an estimated minimum to avoid lots of small copying as the
+    /// structure upsizes.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             points: HashMap::with_capacity(capacity),
@@ -140,10 +151,12 @@ impl NavGraph {
         }
     }
 
+    /// Returns the number of [`NavPoint`]s currently in the graph.
     pub fn len(&self) -> usize {
         self.points.len()
     }
 
+    /// Returns true if there are no [`NavPoint`]s currently in the graph.
     pub fn is_empty(&self) -> bool {
         self.points.is_empty()
     }
@@ -365,12 +378,19 @@ impl NavGraph {
         occupied
     }
 
+    /// Reduces the current_occupancy of the specified [`NavPoint`] by 1, to a minimum of zero.
+    ///
+    /// Has no effect on [`NavPoint`]s which are not in the graph or already have 0 occupants.
+    ///
+    /// If a [`NavPoint`] is at max_occupancy, calling this will allow it to be used in pathing
+    /// again.
     pub fn unoccupy(&mut self, id: u32) {
         self.points.entry(id).and_modify(|p| {
             p.unoccupy();
         });
     }
 
+    /// The heuristic function for estimating [`NavPoint`] path cost.
     #[inline(always)]
     fn h_func(&self, a: &u32, b: &u32) -> u32 {
         if let (Some(a_node), Some(b_node)) = (self.points.get(a), self.points.get(b)) {
@@ -381,6 +401,18 @@ impl NavGraph {
         }
     }
 
+    /// Computes a path from between two [`NavPoint`]s based on their IDs.
+    ///
+    /// If a valid path exists, a [`Vec`] of node IDs is returned.
+    ///
+    /// The path returned is not guaranteed to continue being valid for the duration of travel
+    /// across it, so validity of each node should be checked before moving. If a particular
+    /// [`NavPoint`] is blocked by the time it is reached, one could wait or simply recompute a
+    /// new path from the current position.
+    ///
+    /// The occupancy of a tile is taken into account when computing the path initially. For long
+    /// paths or when multiple parties are moving at during the travel duration, this may result in a
+    /// suboptimal or odd pathing.
     pub fn find_path(&self, a: u32, b: u32) -> Option<Vec<u32>> {
         let mut cap_guess = 0_usize;
         if let (Some(a_node), Some(b_node)) = (self.points.get(&a), self.points.get(&b)) {
