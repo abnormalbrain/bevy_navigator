@@ -1,7 +1,12 @@
 mod navigation;
+mod traveler;
 
 use bevy_app::{App, Plugin};
-pub use navigation::{NavGraph, NavPoint};
+use bevy_ecs::schedule::IntoSystemDescriptor;
+
+pub use navigation::{NavGraph, NavPoint, NavPointRef};
+use traveler::{compute_initial_path, move_travelers};
+pub use traveler::{AutoTraveler, TravelingPaused};
 
 #[derive(Default, Clone, Copy)]
 pub struct NavigatorPlugin {
@@ -21,6 +26,10 @@ impl NavigatorPlugin {
 
 impl Plugin for NavigatorPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(NavGraph::with_capacity(self.initial_graph_capacity));
+        app.insert_resource(NavGraph::with_capacity(self.initial_graph_capacity))
+            .add_system(compute_initial_path.label("compute_path"))
+            .add_system(move_travelers.after("compute_path"))
+            .register_type::<AutoTraveler>()
+            .register_type::<NavPointRef>();
     }
 }

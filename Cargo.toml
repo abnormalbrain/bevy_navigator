@@ -21,6 +21,8 @@ rand = "0.8"
 
 [dev-dependencies]
 criterion = "0.4"
+bevy = { version = "0.9", default-features = false, features = ["bevy_asset", "render", "png", "x11", "bevy_winit", "bevy_sprite"] }
+bevy-inspector-egui = "0.16"
 
 [[bench]]
 name = "bench_path"

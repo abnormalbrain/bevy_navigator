@@ -3,10 +3,13 @@ use std::{
     collections::{BinaryHeap, VecDeque},
 };
 
-use bevy_ecs::system::Resource;
+use bevy_ecs::{component::Component, system::Resource};
 use bevy_math::Vec3;
 use bevy_reflect::prelude::*;
 use bevy_utils::{HashMap, HashSet};
+
+#[derive(Debug, Default, Copy, Clone, Component, Reflect, FromReflect)]
+pub struct NavPointRef(pub u32);
 
 #[derive(Debug, Reflect, FromReflect)]
 pub struct NavPoint {
@@ -60,6 +63,10 @@ impl NavPoint {
         self.current_occupancy < self.max_occupancy
     }
 
+    pub fn connections(&self) -> &HashSet<u32> {
+        &self.connections
+    }
+
     #[inline(always)]
     pub fn occupy(&mut self) -> bool {
         if self.can_occupy() {
@@ -71,7 +78,11 @@ impl NavPoint {
     }
 
     pub fn unoccupy(&mut self) {
-        self.current_occupancy = (self.current_occupancy - 1).max(0);
+        self.current_occupancy = if self.current_occupancy > 0 {
+            self.current_occupancy - 1
+        } else {
+            0
+        };
     }
 }
 
@@ -99,7 +110,7 @@ impl NavPointIdFreelist {
     }
 }
 
-#[derive(Debug, Default, Resource)]
+#[derive(Debug, Default, Resource, Reflect, FromReflect)]
 pub struct NavGraph {
     points: HashMap<u32, NavPoint>,
     highest_id: u32,
@@ -247,12 +258,12 @@ impl NavGraph {
     /// # nav_graph.connect_points(8, 9);
     ///
     ///
-    /// assert_eq!(nav_graph.find_path(1, 9).unwrap()[..], [5, 9]);
-    /// assert_eq!(nav_graph.find_path(1, 7).unwrap()[..], [4, 7]);
+    /// assert_eq!(nav_graph.find_path(1, 9).unwrap()[..], [1, 5, 9]);
+    /// assert_eq!(nav_graph.find_path(1, 7).unwrap()[..], [1, 4, 7]);
     /// ```
     ///
     pub fn connect_points(&mut self, a: u32, b: u32) {
-        if !self.has_node(a) || !self.has_node(b) {
+        if !self.has_nav_point(a) || !self.has_nav_point(b) || a == b {
             return;
         }
 
@@ -266,8 +277,14 @@ impl NavGraph {
 
     /// Returns true if a node with the current ID is in the graph.
     #[inline(always)]
-    pub fn has_node(&self, id: u32) -> bool {
+    pub fn has_nav_point(&self, id: u32) -> bool {
         self.points.contains_key(&id)
+    }
+
+    /// Returns the specified [`NavPoint`] if it exists in the graph.
+    #[inline(always)]
+    pub fn get_nav_point(&self, id: u32) -> Option<&NavPoint> {
+        self.points.get(&id)
     }
 
     /// Removes the specified point from the graph and all related connections.
@@ -302,9 +319,9 @@ impl NavGraph {
     /// nav_graph.connect_points(2, 4);
     /// nav_graph.connect_points(3, 4);
     ///
-    /// assert_eq!(nav_graph.find_path(1, 4).unwrap()[..], [2, 4]);
+    /// assert_eq!(nav_graph.find_path(1, 4).unwrap()[..], [1, 2, 4]);
     /// nav_graph.remove_point(2);
-    /// assert_eq!(nav_graph.find_path(1, 4).unwrap()[..], [3, 4]);
+    /// assert_eq!(nav_graph.find_path(1, 4).unwrap()[..], [1, 3, 4]);
     /// ```
     ///
     pub fn remove_point(&mut self, id: u32) {
@@ -403,8 +420,7 @@ impl NavGraph {
 
     /// Computes a path from between two [`NavPoint`]s based on their IDs.
     ///
-    /// If a valid path exists, a [`Vec`] of node IDs is returned. The path does not contain the
-    /// starting node id (the one passed in as the `a` parameter.
+    /// If a valid path exists, a [`Vec`] of node IDs is returned.
     ///
     /// The path returned is not guaranteed to continue being valid for the duration of travel
     /// across it, so validity of each node should be checked before moving. If a particular
@@ -446,6 +462,7 @@ impl NavGraph {
                     total_path.push_front(prev);
                     prev = came_from[&prev];
                 }
+                total_path.push_front(a);
                 return Some(total_path.into());
             }
 
@@ -501,9 +518,9 @@ mod tests {
         let path = nav_graph.find_path(1, 3);
         assert!(path.is_some());
         let p = path.unwrap();
-        assert_eq!(p.len(), 2);
-        assert_eq!(p[0], 2);
-        assert_eq!(p[1], 3);
+        assert_eq!(p.len(), 3);
+        assert_eq!(p[1], 2);
+        assert_eq!(p[2], 3);
     }
 
     #[test]
@@ -521,14 +538,14 @@ mod tests {
         nav_graph.occupy(2);
 
         let path = nav_graph.find_path(1, 4).unwrap();
-        assert_eq!(path[0], 3);
-        assert_eq!(path[1], 4);
+        assert_eq!(path[1], 3);
+        assert_eq!(path[2], 4);
 
         nav_graph.occupy(3);
         assert!(nav_graph.find_path(1, 4).is_none());
 
         nav_graph.unoccupy(2);
-        assert_eq!(nav_graph.find_path(1, 4).unwrap()[0], 2);
+        assert_eq!(nav_graph.find_path(1, 4).unwrap()[1], 2);
     }
 
     #[test]
@@ -544,9 +561,9 @@ mod tests {
         nav_graph.connect_points(2, 4);
         nav_graph.connect_points(3, 4);
 
-        assert_eq!(nav_graph.find_path(1, 4).unwrap()[0], 2);
+        assert_eq!(nav_graph.find_path(1, 4).unwrap()[1], 2);
 
         nav_graph.remove_point(2);
-        assert_eq!(nav_graph.find_path(1, 4).unwrap()[0], 3);
+        assert_eq!(nav_graph.find_path(1, 4).unwrap()[1], 3);
     }
 }
